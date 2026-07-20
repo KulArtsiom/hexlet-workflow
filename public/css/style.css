@@ -1,0 +1,11 @@
+.hero {
+  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
+}
+
+.card {
+  transition: transform 0.15s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+}

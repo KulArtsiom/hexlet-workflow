@@ -1,0 +1,43 @@
+extends layout.pug
+
+block content
+  .container.mt-5
+    h1.mb-4 Проверка реверс-прокси
+
+    if throughProxy
+      .alert.alert-success
+        strong Запрос пришёл через прокси.
+        |  Caddy добавил заголовки X-Forwarded-*.
+    else
+      .alert.alert-warning
+        strong Запрос пришёл напрямую.
+        |  Заголовков X-Forwarded-* нет — прокси в цепочке не было.
+
+    table.table.table-bordered.w-auto
+      thead.table-light
+        tr
+          th Параметр
+          th Значение
+      tbody
+        tr
+          td Host
+          td
+            code= host
+        tr
+          td IP клиента (для приложения)
+          td
+            code= clientIp
+        each header in forwardedHeaders
+          tr
+            td= header.name
+            td
+              code= header.value
+
+    p.text-muted
+      | Открой эту страницу двумя способами и сравни таблицу: напрямую —
+      |
+      code localhost:3000/proxy
+      | , через Caddy —
+      |
+      code https://localhost/proxy
+      | .

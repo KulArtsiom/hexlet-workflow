@@ -19,10 +19,8 @@ describe('app', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch('Привет от Хекслета!');
-    expect(res.body).toMatch(
-      'Приложение запущено, но сообщение сервера не установлено!',
-    );
+    expect(res.body).toMatch('Приложение работает!');
+    expect(res.body).toMatch('Переменная SERVER_MESSAGE не установлена');
   });
 
   it('main page with environment variable SERVER_MESSAGE', async () => {
@@ -34,13 +32,44 @@ describe('app', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatch('Привет от Хекслета!');
+    expect(res.body).toMatch('Приложение работает!');
     expect(res.body).toMatch(
-      `Приложение запущено и передает сообщение: ${process.env.SERVER_MESSAGE}`,
+      `Сообщение сервера: ${process.env.SERVER_MESSAGE}`,
     );
   });
-  //
-  // after all(() => {
-  //   app.close();
-  // });
+
+  it('health endpoint', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/health',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: 'ok' });
+  });
+
+  it('proxy page detects direct request', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/proxy',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch('Запрос пришёл напрямую.');
+  });
+
+  it('proxy page detects request through proxy', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/proxy',
+      headers: {
+        'x-forwarded-for': '203.0.113.5',
+        'x-forwarded-proto': 'https',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatch('Запрос пришёл через прокси.');
+    expect(res.body).toMatch('203.0.113.5');
+  });
 });

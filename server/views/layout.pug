@@ -1,8 +1,27 @@
 doctype html
-html(lang=en)
+html(lang="ru")
   head
-    title DevOps Example App
+    meta(charset="utf-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1")
+    title DevOps Lab — учебный проект
     link(href="/assets/css/bootstrap.min.css" rel="stylesheet")
-  body
+    link(href="/css/style.css" rel="stylesheet")
+  body.d-flex.flex-column.min-vh-100
+    nav.navbar.navbar-expand.navbar-dark.bg-dark
+      .container
+        a.navbar-brand(href="/")
+          img.me-2.align-text-bottom(src="/images/logo.svg" alt="DevOps Lab" width="28" height="28")
+          | DevOps Lab
+        ul.navbar-nav
+          li.nav-item
+            a.nav-link(href="/") Главная
+          li.nav-item
+            a.nav-link(href="/proxy") Прокси
+          li.nav-item
+            a.nav-link(href="/health") Health
 
-  block content
+    main.flex-grow-1
+      block content
+
+    footer.py-3.text-center.text-muted
+      small Учебный проект курса DevOps · Artyom Kul

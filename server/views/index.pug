@@ -2,15 +2,28 @@ extends layout.pug
 
 block content
   .container.mt-5
-    .card
-      .card-body.p-5.bg-light
-        .row
-          .col-2
-            img.img-fluid(src="/images/app.png")
-          .col-auto
-            .display-4 Привет от Хекслета!
-            hr
-            if serverMessage
-              p.lead Приложение запущено и передает сообщение: !{serverMessage}
-            else
-              p.lead Приложение запущено, но сообщение сервера не установлено!
+    .p-5.mb-4.rounded-3.hero
+      .row.align-items-center.g-4
+        .col-md-2.text-center
+          img.img-fluid(src="/images/logo.svg" alt="Логотип DevOps Lab" width="96" height="96")
+        .col-md-10
+          h1.display-5 Приложение работает!
+          p.lead Fastify-приложение в Docker, за реверс-прокси Caddy.
+          if serverMessage
+            .alert.alert-success.mb-0 Сообщение сервера: !{serverMessage}
+          else
+            .alert.alert-secondary.mb-0 Переменная SERVER_MESSAGE не установлена
+
+    h2.h4.mb-3 Путь курса
+    .row.g-3
+      each step in steps
+        .col-md-3
+          .card.h-100(class=step.done ? 'border-success' : '')
+            .card-body
+              h5.card-title= step.title
+              p.card-text.text-muted= step.note
+            .card-footer.bg-transparent
+              if step.done
+                span.badge.text-bg-success Пройдено
+              else
+                span.badge.text-bg-secondary Впереди
