@@ -1,4 +1,4 @@
-name: ci-app-default
+name: main
 
 on: 
   - push
