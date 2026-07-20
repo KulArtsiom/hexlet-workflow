@@ -7,3 +7,24 @@ services:
       - .:/app
     ports:
       - 3000:3000
+  caddy:
+    build:
+      # Контекст — КОРЕНЬ проекта, не services/caddy!
+      # Иначе COPY services/caddy/Caddyfile и COPY . /app
+      # в Dockerfile не найдут файлы: пути в COPY считаются
+      # от контекста сборки.
+      context: .
+      dockerfile: services/caddy/Dockerfile
+    volumes:
+      # Живая статика: файлы проекта видны Caddy без пересборки.
+      - .:/app
+      # Живой конфиг: правишь Caddyfile на хосте ->
+      # docker compose restart caddy — и всё, без rebuild.
+      # В продакшене этих volumes не будет — там работает
+      # то, что зашито в образ.
+      - ./services/caddy/Caddyfile:/etc/caddy/Caddyfile
+    ports:
+      # Стандартные порты: 80 — HTTP (Caddy сам редиректит
+      # на HTTPS), 443 — HTTPS.
+      - 80:80
+      - 443:443
