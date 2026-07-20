@@ -1,10 +1,26 @@
-services:
-  app:
-    build: .
-    image: hexletcomponents/devops-example-app
+# file: docker-compose.yml
+version: "3"
 
-  caddy:
+services:
+  app: # Имя сервиса
     build:
+      # Контекст для сборки образа,
+      # в данном случае, текущая директория
+      context: .
+      # Имя Docker-файла из которого будет собран образ
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    ports:
+      - 3000:3000
+
+  caddy: # Веб-сервер
+    build: # Находится внутри services/caddy
       context: .
       dockerfile: services/caddy/Dockerfile
-    image: hexletcomponents/devops-example-caddy
+    volumes:
+      - .:/app
+      - ./services/caddy/Caddyfile:/etc/caddy/Caddyfile
+    ports:
+      - 80:80
+      - 443:443
