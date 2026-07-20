@@ -1,0 +1,16 @@
+extends layout.pug
+
+block content
+  .container.mt-5
+    .card
+      .card-body.p-5.bg-light
+        .row
+          .col-2
+            img.img-fluid(src="/images/app.png")
+          .col-auto
+            .display-4 Привет от Хекслета!
+            hr
+            if serverMessage
+              p.lead Приложение запущено и передает сообщение: !{serverMessage}
+            else
+              p.lead Приложение запущено, но сообщение сервера не установлено!
