@@ -10,9 +10,9 @@ on:
 # Переменные конвейера, чтобы не повторять теги в шагах.
 # :test — временный тег для проверки, :latest — публичный.
 env:
-  APP_TEST_TAG: <username>/devops-lab-app:test
-  APP_TAG: <username>/devops-lab-app:latest
-  CADDY_TAG: <username>/devops-lab-caddy:latest
+  APP_TEST_TAG: koolinio/devops-lab-app:test
+  APP_TAG: koolinio/devops-lab-app:latest
+  CADDY_TAG: koolinio/devops-lab-caddy:latest
 
 jobs:
   docker:
