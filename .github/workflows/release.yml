@@ -8,8 +8,8 @@ on:
       - 'v*'
 
 env:
-  APP_IMAGE: <username>/devops-lab-app
-  CADDY_IMAGE: <username>/devops-lab-caddy
+  APP_IMAGE: koolinio/devops-lab-app
+  CADDY_IMAGE: koolinio/devops-lab-caddy
 
 jobs:
   release:
