@@ -12,5 +12,5 @@ jobs:
         with:
           node-version: '26'
       - run: make setup
-      - run: male lint
+      - run: make lint
       - run: make test
