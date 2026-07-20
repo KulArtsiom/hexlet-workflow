@@ -25,7 +25,12 @@ const journeySteps = [
   },
   {
     title: 'Продакшен',
-    note: 'Ansible, релизы, мониторинг',
+    note: 'Релизы и деплой Ансиблом одной командой',
+    done: true,
+  },
+  {
+    title: 'Мониторинг',
+    note: 'Sentry, логи, алерты',
     done: false,
   },
 ];
