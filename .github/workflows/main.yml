@@ -1,0 +1,74 @@
+name: main
+
+# Триггер: любой push в ветку dev-caddy.
+# Воркфлоу сработает, потому что этот файл лежит в самой ветке.
+on:
+  push:
+    branches:
+      - dev-caddy
+
+# Переменные конвейера, чтобы не повторять теги в шагах.
+# :test — временный тег для проверки, :latest — публичный.
+env:
+  APP_TEST_TAG: <username>/devops-lab-app:test
+  APP_TAG: <username>/devops-lab-app:latest
+  CADDY_TAG: <username>/devops-lab-caddy:latest
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      # Забираем код репозитория на раннер.
+      - uses: actions/checkout@v5
+
+      # Buildx — расширенный сборщик Docker: умеет кеш между
+      # шагами. Благодаря ему повторная сборка ниже (для push)
+      # не собирает слои заново, а берёт из кеша.
+      - uses: docker/setup-buildx-action@v3
+
+      # Логин в Docker Hub. Значения приходят из секретов —
+      # в логах они маскируются звёздочками.
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      # ЭТАП 1: собрать образ приложения, но НЕ публиковать.
+      # load: true — выгрузить образ в локальный docker раннера,
+      # чтобы следующие шаги могли его запустить.
+      - name: Build app image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.APP_TEST_TAG }}
+
+      # ЭТАП 2: проверки ВНУТРИ собранного образа.
+      # Тестируем ровно тот артефакт, который поедет в реестр,
+      # а не «код на раннере» — это принцип test what you ship.
+      - name: Run tests
+        run: docker run --rm ${{ env.APP_TEST_TAG }} npm test
+
+      - name: Run linter
+        run: docker run --rm ${{ env.APP_TEST_TAG }} npx biome check .
+
+      # ЭТАП 3: публикация. Выполняется только если шаги выше
+      # прошли — упавший шаг останавливает job.
+      # Слои берутся из кеша buildx, пересборки нет.
+      - name: Push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.APP_TAG }}
+
+      # Образ caddy: тот же контекст (корень!), но другой
+      # Dockerfile. Тестов у него нет — конфиг проверяется
+      # интеграционно, через compose.
+      - name: Push caddy image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/caddy/Dockerfile
+          push: true
+          tags: ${{ env.CADDY_TAG }}
