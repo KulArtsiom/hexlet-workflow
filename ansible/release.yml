@@ -1,0 +1,40 @@
+# Плейбук: план из задач, применяемый к группе серверов.
+- name: Deploy DevOps Lab
+  hosts: webservers      # группа из инвентаря
+  tasks:
+
+    # Аналог: docker network create devops-example
+    # Если сеть уже есть — задача скажет "ok" и ничего не тронет.
+    - name: Create shared network
+      community.docker.docker_network:
+        name: devops-example
+
+    # Аналог вчерашнего docker run для app.
+    # version придёт снаружи, из --extra-vars при запуске:
+    # один плейбук — любые версии, и деплой, и откат.
+    - name: Run app container
+      community.docker.docker_container:
+        name: app                      # имя = DNS-имя в сети (его ждёт Caddyfile!)
+        image: "koolinio/devops-lab-app:{{ version }}"
+        pull: true                     # скачать образ, если его нет на сервере
+        restart_policy: always
+        state: started
+        networks:
+          - name: devops-example
+        env:
+          SERVER_MESSAGE: "Задеплоено Ансиблом!"
+        # ports не публикуем — доступ только через caddy
+
+    # Аналог docker run для caddy.
+    - name: Run caddy container
+      community.docker.docker_container:
+        name: caddy
+        image: "koolinio/devops-lab-caddy:{{ version }}"
+        pull: true
+        restart_policy: always
+        state: started
+        networks:
+          - name: devops-example
+        published_ports:
+          - 80:80
+          - 443:443

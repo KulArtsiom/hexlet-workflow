@@ -51,4 +51,7 @@ compose-lint:
 # Остановить и удалить контейнеры проекта.
 # Полезно после Ctrl+C и перед сменой конфигурации портов.
 compose-down:
-	docker compose down	
+	docker compose down
+
+deploy:
+	ansible-playbook ansible/release.yml -i ansible/inventory.yml --extra-vars "version=$(V)"
