@@ -1,31 +1,32 @@
-# Плейбук: план из задач, применяемый к группе серверов.
-- name: Deploy DevOps Lab
-  hosts: webservers      # группа из инвентаря
+# Плей 1: приложение — на ВСЕ серверы группы webservers.
+- name: Deploy app
+  hosts: webservers
+  become: true       # docker через sudo: не зависим от групп и таймингов
   tasks:
-
-    # Аналог: docker network create devops-example
-    # Если сеть уже есть — задача скажет "ok" и ничего не тронет.
     - name: Create shared network
       community.docker.docker_network:
         name: devops-example
 
-    # Аналог вчерашнего docker run для app.
-    # version придёт снаружи, из --extra-vars при запуске:
-    # один плейбук — любые версии, и деплой, и откат.
     - name: Run app container
       community.docker.docker_container:
-        name: app                      # имя = DNS-имя в сети (его ждёт Caddyfile!)
+        name: app
         image: "koolinio/devops-lab-app:{{ version }}"
-        pull: true                     # скачать образ, если его нет на сервере
+        pull: true
         restart_policy: always
         state: started
         networks:
           - name: devops-example
+        # Подстановка host-переменных из инвентаря:
+        # на web1 и web2 получатся разные значения.
         env:
-          SERVER_MESSAGE: "Задеплоено Ансиблом!"
-        # ports не публикуем — доступ только через caddy
+          SERVER_MESSAGE: "{{ server_message }}"
+        published_ports: "{{ app_ports }}"
 
-    # Аналог docker run для caddy.
+# Плей 2: балансировщик — только на группу balancers (web1).
+- name: Deploy balancer
+  hosts: balancers
+  become: true
+  tasks:
     - name: Run caddy container
       community.docker.docker_container:
         name: caddy

@@ -1,0 +1,19 @@
+# Подготовка «голого» сервера к работе. Запускается редко:
+# при добавлении нового сервера в парк.
+- name: Prepare servers
+  hosts: webservers
+  become: true        # выполнять через sudo — ставим пакеты
+  tasks:
+    - name: Install Docker and Python SDK
+      ansible.builtin.apt:
+        name:
+          - docker.io        # сам Docker
+          - python3-docker   # SDK для docker-модулей Ansible
+        state: present       # «должно быть установлено», не «установи»
+        update_cache: true   # apt update перед установкой
+
+    - name: Allow user to run docker without sudo
+      ansible.builtin.user:
+        name: koolinio
+        groups: docker
+        append: true         # добавить к группам, не заменить их

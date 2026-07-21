@@ -11,3 +11,15 @@ all:
           # ssh-ключ не указываем: возьмётся дефолтный
           # ~/.ssh/id_ed25519 — тот же, что при ручном ssh
           ansible_python_interpreter: /usr/bin/python3
+          server_message: "Вас обслуживает web1"
+          app_ports: []
+        web2:
+          ansible_host: 158.160.80.242   # реальный адрес
+          ansible_user: koolinio        # под кем заходить по ssh
+          ansible_python_interpreter: /usr/bin/python3  
+          server_message: "Вас обслуживает web2"
+          app_ports:
+            - 3000:3000
+    balancers:
+      hosts:
+        web1:            
