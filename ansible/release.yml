@@ -39,3 +39,6 @@
         published_ports:
           - 80:80
           - 443:443
+        volumes:
+          - "caddy-data:/data"
+          - "caddy-config:/config"  

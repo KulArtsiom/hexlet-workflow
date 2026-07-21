@@ -40,4 +40,11 @@ localhost, devops-example.test {
 	log {
 		format json
 	}
+
+	# Метрики — внутренняя информация о сервисе.
+	# Prometheus заберёт их напрямую по docker-сети и VPC,
+	# снаружи этот путь не нужен никому.
+	handle /metrics* {
+		respond 404
+	}
 }

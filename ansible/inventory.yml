@@ -13,13 +13,17 @@ all:
           ansible_python_interpreter: /usr/bin/python3
           server_message: "Вас обслуживает web1"
           app_ports: []
+          internal_ip: 10.129.0.33
+          app_scrape_target: "app:3000"
         web2:
-          ansible_host: 158.160.80.242   # реальный адрес
+          ansible_host: 158.160.21.148   # реальный адрес
           ansible_user: koolinio        # под кем заходить по ssh
           ansible_python_interpreter: /usr/bin/python3  
           server_message: "Вас обслуживает web2"
+          app_scrape_target: "10.129.0.24:3000"
+          internal_ip: 10.129.0.24
           app_ports:
-            - 3000:3000
+            - "10.129.0.24:3000:3000"
     balancers:
       hosts:
         web1:            
