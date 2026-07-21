@@ -21,7 +21,7 @@ localhost, devops-example.test {
 	# app:3000 — локальный контейнер через docker-сеть,
 	# второй адрес — app на web2 через внутреннюю сеть VPC.
 	handle {
-		reverse_proxy app:3000 158.160.80.242:3000 {
+		reverse_proxy app:3000 10.129.0.24:3000 {
 			# По очереди, а не случайно — чтобы чередование
 			# сообщений было видно глазами при обновлении.
 			lb_policy round_robin
