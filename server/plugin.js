@@ -8,6 +8,7 @@ import pointOfView from '@fastify/view';
 import * as Sentry from '@sentry/node';
 import Pug from 'pug';
 
+import registerMetrics from './metrics.js';
 import addRoutes from './routes.js';
 
 const __dirname = fileURLToPath(path.dirname(import.meta.url));
@@ -49,6 +50,9 @@ const registerPlugins = (app) => {
 
 export default (app, _options) => {
   registerPlugins(app);
+  // Метрики подключаем до маршрутов: хук onResponse должен
+  // успеть навеситься на все запросы, включая /metrics.
+  registerMetrics(app);
   addRoutes(app);
   registerErrorHandler(app);
 
