@@ -1,0 +1,38 @@
+global:
+  # Как часто опрашивать таргеты. 15s — разумный компромисс:
+  # чаще = больше данных и нагрузки, реже = грубее графики.
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  # Как часто пересчитывать правила алертов.
+  evaluation_interval: 15s
+  # Метка, которая добавится ко всем метрикам этого Prometheus.
+  external_labels:
+    cluster: devops-example
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # Prometheus мониторит сам себя — стандартная практика.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          server: web1
+
+  - job_name: app
+    metrics_path: /metrics
+    static_configs:
+{% for host in groups['webservers'] | sort %}
+      - targets: ["{{ hostvars[host].app_scrape_target }}"]
+        labels:
+          server: {{ host }}
+{% endfor %}
+
+  - job_name: node
+    static_configs:
+{% for host in groups['webservers'] | sort %}
+      - targets: ["{{ hostvars[host].internal_ip }}:9100"]
+        labels:
+          server: {{ host }}
+{% endfor %}

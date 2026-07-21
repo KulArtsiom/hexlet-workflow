@@ -1,0 +1,21 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    # СТАБИЛЬНЫЙ uid — на него ссылаются панели дашборда.
+    # Поменяешь — все панели скажут "Datasource was not found".
+    uid: prometheus
+    type: prometheus
+    # proxy: запросы шлёт бэкенд Grafana, а не браузер.
+    # Поэтому адрес резолвится внутри docker-сети, и Prometheus
+    # не нужно выставлять наружу.
+    access: proxy
+    orgId: 1
+    url: http://prometheus:9090
+    isDefault: true
+    # Источник правды — файл в репозитории, а не UI.
+    editable: false
+    jsonData:
+      httpMethod: POST
+      # Должен совпадать со scrape_interval в prometheus.yml.
+      timeInterval: 15s

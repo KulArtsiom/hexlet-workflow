@@ -1,0 +1,130 @@
+groups:
+  - name: availability
+    rules:
+      - alert: AppInstanceDown
+        expr: up{job="app"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "app on {{ $labels.server }} is not scrapeable"
+
+      # absent(), а НЕ count(...) == 0: когда оба бэкенда лежат,
+      # up{job="app"} == 1 даёт пустой вектор, count() над пустым
+      # входом тоже пуст, и сравнение с нулём не выполняется —
+      # алерт молчал бы ровно тогда, когда он нужен.
+      - alert: AppAllInstancesDown
+        expr: absent(up{job="app"} == 1)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "all app backends are down"
+
+      # up == 0 не сработает, если таргет ПРОПАЛ из конфига —
+      # серия просто исчезает. Этот алерт ловит такой случай.
+      # or vector(0) — страховка на случай, если job исчез целиком.
+      - alert: AppTargetsMissing
+        expr: (count(up{job="app"}) or vector(0)) < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "fewer than 2 app targets configured"
+
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "node_exporter on {{ $labels.server }} is down"
+
+  - name: app
+    rules:
+      # route!="/metrics" — хук считает и сам эндпоинт метрик,
+      # а его опрашивает Prometheus 4 раза в минуту.
+      # Без фильтра он перекосил бы общий rate.
+      - alert: AppHighErrorRate
+        expr: |
+          sum by (server) (rate(http_requests_total{job="app", route!="/metrics", status_code=~"5.."}[5m]))
+            /
+          sum by (server) (rate(http_requests_total{job="app", route!="/metrics"}[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx rate above 5% on {{ $labels.server }}"
+
+      # sum by (le, ...) ДО histogram_quantile — иначе перцентиль
+      # посчитается неверно. Усреднять два готовых p95 нельзя.
+      - alert: AppHighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, server) (rate(http_request_duration_seconds_bucket{job="app", route!="/metrics"}[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 1s on {{ $labels.server }}"
+
+      # Главный признак больного Node-процесса: событийный цикл
+      # заблокирован, приложение перестаёт успевать отвечать.
+      - alert: AppEventLoopBlocked
+        expr: nodejs_eventloop_lag_p99_seconds{job="app"} > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "event loop p99 lag above 200ms on {{ $labels.server }}"
+
+  - name: host
+    rules:
+      - alert: HostHighCpu
+        expr: 100 - (avg by (server) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU above 85% on {{ $labels.server }}"
+
+      - alert: HostLowMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "less than 10% RAM available on {{ $labels.server }}"
+
+      - alert: HostDiskLow
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay|squashfs"}
+            / node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay|squashfs"}
+            * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "root filesystem below 15% free on {{ $labels.server }}"
+
+      # Не «мало места», а «кончится через сутки» — есть время среагировать.
+      - alert: HostDiskWillFillIn24h
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay|squashfs"}[6h], 24 * 3600) < 0
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "root filesystem on {{ $labels.server }} fills up within 24h"
+
+  - name: prometheus
+    rules:
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "prometheus is running a stale config"

@@ -1,0 +1,214 @@
+# Мониторинг. Запускается отдельно от релиза приложения:
+#   ansible-playbook ansible/monitoring.yml -i ansible/inventory.yml \
+#     -e "grafana_admin_password=..."
+#
+# Плей 1: экспортёр метрик хоста — на ВСЕ серверы.
+# Плей 2: Prometheus + Grafana — только на web1 (группа balancers).
+
+- name: Deploy node exporter
+  hosts: webservers
+  become: true
+  tags: [node_exporter]
+  vars:
+    node_exporter_version: v1.12.1
+  tasks:
+    - name: Run node-exporter container
+      community.docker.docker_container:
+        name: node-exporter
+        image: "quay.io/prometheus/node-exporter:{{ node_exporter_version }}"
+        pull: true
+        restart_policy: always
+        state: started
+
+        # Сеть хоста: иначе сборщик увидит виртуальный интерфейс
+        # контейнера вместо реальных сетевых карт сервера.
+        network_mode: host
+
+        # PID хоста: сборщик файловых систем читает /proc/1/mountinfo.
+        # Без этого PID 1 — сам node-exporter, и он видит только
+        # свою таблицу монтирования, а не хостовую.
+        pid_mode: host
+
+        # Корень хоста внутрь контейнера, только на чтение.
+        # rslave — чтобы диски, примонтированные на хосте ПОСЛЕ
+        # старта контейнера, всё равно стали видны.
+        volumes:
+          - "/:/host:ro,rslave"
+
+        command:
+          # Где искать файловую систему хоста. Без этого флага
+          # метрики диска показывали бы overlayfs контейнера,
+          # а не реальный диск сервера.
+          - "--path.rootfs=/host"
+
+          # Слушаем ТОЛЬКО внутренний адрес VPC.
+          # У node-exporter нет аутентификации вообще,
+          # а у web1 есть публичный IP — наружу его нельзя.
+          - "--web.listen-address={{ internal_ip }}:9100"
+
+          # Отключаем сборщики, которых на облачной ВМ нет.
+          # Иначе они пишут ошибки в лог каждые 15 секунд.
+          - "--no-collector.wifi"
+          - "--no-collector.hwmon"
+          - "--no-collector.infiniband"
+
+    # Не идём дальше, пока экспортёр реально не ответит.
+    - name: Wait for node-exporter
+      ansible.builtin.uri:
+        url: "http://{{ internal_ip }}:9100/metrics"
+      register: node_exporter_check
+      retries: 10
+      delay: 3
+      until: node_exporter_check.status == 200
+      changed_when: false
+
+
+- name: Deploy monitoring stack
+  hosts: balancers          # только web1
+  become: true
+  tags: [server]
+  vars:
+    prometheus_version: v3.13.1
+    grafana_version: 13.1.1
+    config_root: /etc/devops-example
+
+  handlers:
+    # Правка bind-mount'а конфига НЕ меняет параметры контейнера,
+    # поэтому docker_container отрапортует ok и ничего не перезапустит.
+    # Без хендлера новые таргеты и алерты просто не подхватятся.
+    - name: Restart prometheus
+      community.docker.docker_container:
+        name: prometheus
+        state: started
+        restart: true
+
+    # Датасорсы Grafana читает ТОЛЬКО при старте.
+    # Дашборды подхватываются сами по updateIntervalSeconds.
+    - name: Restart grafana
+      community.docker.docker_container:
+        name: grafana
+        state: started
+        restart: true
+
+  tasks:
+    # docker_container сеть НЕ создаёт — только подключается.
+    # Сейчас она есть после release.yml, но плейбук должен
+    # быть самодостаточным.
+    - name: Ensure shared network exists
+      community.docker.docker_network:
+        name: devops-example
+
+    - name: Create config directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        # 0755: внутри контейнеров процессы не root
+        # (prometheus — nobody, grafana — uid 472), им нужно читать.
+        mode: "0755"
+      loop:
+        - "{{ config_root }}/prometheus"
+        - "{{ config_root }}/grafana/provisioning/datasources"
+        - "{{ config_root }}/grafana/provisioning/dashboards"
+        - "{{ config_root }}/grafana/dashboards"
+
+    # ---------- Prometheus ----------
+
+    # template, а не copy: адреса серверов подставляются из инвентаря.
+    - name: Deploy prometheus.yml
+      ansible.builtin.template:
+        src: ../services/prometheus/prometheus.yml.j2
+        dest: "{{ config_root }}/prometheus/prometheus.yml"
+        mode: "0644"
+      notify: Restart prometheus
+
+    # ВАЖНО: copy, а не template! В аннотациях есть Go-шаблоны
+    # {{ $labels.server }} — Jinja2 на них падает с ошибкой.
+    - name: Deploy alert rules
+      ansible.builtin.copy:
+        src: ../services/prometheus/alerts.yml
+        dest: "{{ config_root }}/prometheus/alerts.yml"
+        mode: "0644"
+      notify: Restart prometheus
+
+    - name: Run prometheus container
+      community.docker.docker_container:
+        name: prometheus
+        image: "prom/prometheus:{{ prometheus_version }}"
+        pull: true
+        restart_policy: always
+        state: started
+        networks:
+          - name: devops-example
+        volumes:
+          - "{{ config_root }}/prometheus:/etc/prometheus:ro"
+          # Именованный том, а не bind-mount: Docker создаёт его
+          # с владельцем из образа (nobody), permission denied не будет.
+          - "prometheus-data:/prometheus"
+        # ВНИМАНИЕ: command ПОЛНОСТЬЮ заменяет CMD образа.
+        # Первые два аргумента были там по умолчанию — их обязательно
+        # повторить, иначе Prometheus стартует с примерным конфигом
+        # и положит данные мимо тома.
+        command:
+          - "--config.file=/etc/prometheus/prometheus.yml"
+          - "--storage.tsdb.path=/prometheus"
+          - "--storage.tsdb.retention.time=15d"
+          - "--storage.tsdb.retention.size=2GB"
+        # Только петля! Наружу порт не слушается вообще —
+        # это надёжнее любых правил firewall.
+        published_ports:
+          - "127.0.0.1:9090:9090"
+
+    # ---------- Grafana ----------
+
+    - name: Deploy grafana provisioning
+      ansible.builtin.copy:
+        src: "../services/grafana/provisioning/{{ item }}"
+        dest: "{{ config_root }}/grafana/provisioning/{{ item }}"
+        mode: "0644"
+      loop:
+        - datasources/prometheus.yml
+        - dashboards/default.yml
+      notify: Restart grafana
+
+    - name: Deploy grafana dashboards
+      ansible.builtin.copy:
+        src: ../services/grafana/dashboards/
+        dest: "{{ config_root }}/grafana/dashboards/"
+        mode: "0644"
+
+    - name: Run grafana container
+      community.docker.docker_container:
+        name: grafana
+        image: "grafana/grafana:{{ grafana_version }}"
+        pull: true
+        restart_policy: always
+        state: started
+        networks:
+          - name: devops-example
+        volumes:
+          # Именованный том: внутри Grafana работает под uid 472,
+          # bind-mount дал бы root-owned каталог и падение старта.
+          - "grafana-data:/var/lib/grafana"
+          - "{{ config_root }}/grafana/provisioning:/etc/grafana/provisioning:ro"
+          - "{{ config_root }}/grafana/dashboards:/etc/grafana/dashboards:ro"
+        # Только петля, как у Prometheus. Наружу — ничего.
+        # Внутри контейнера Grafana осталась на своём 3000:
+        # конфликта с app:3000 нет, у контейнеров разные IP.
+        published_ports:
+          - "127.0.0.1:3001:3000"
+        env:
+          # Все значения — строки, иначе community.docker падает.
+          GF_SERVER_ROOT_URL: "http://localhost:3001/"
+          GF_SECURITY_ADMIN_USER: "admin"
+          # Применяется ТОЛЬКО при первом старте: дальше пароль
+          # живёт в grafana.db внутри тома grafana-data.
+          GF_SECURITY_ADMIN_PASSWORD: "{{ grafana_admin_password }}"
+          # Через SSH-туннель ходим по http, поэтому secure-куки
+          # обязаны быть выключены — иначе логин молча не сработает.
+          GF_SECURITY_COOKIE_SECURE: "false"
+          GF_USERS_ALLOW_SIGN_UP: "false"
+          GF_AUTH_ANONYMOUS_ENABLED: "false"
+          GF_ANALYTICS_REPORTING_ENABLED: "false"
+          GF_ANALYTICS_CHECK_FOR_UPDATES: "false"

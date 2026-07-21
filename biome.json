@@ -1,7 +1,10 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
   "vcs": { "enabled": false },
-  "files": { "ignoreUnknown": false },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": ["**", "!services/grafana/dashboards/**"]
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space"
